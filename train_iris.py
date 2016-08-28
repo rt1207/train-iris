@@ -24,7 +24,7 @@ parser.add_argument('--gpu', '-g', default=-1, type=int,
                     help='GPU ID (negative value indicates CPU)')
 args = parser.parse_args()
 
-batchsize = 10
+batchsize = 2 # 100
 n_epoch = 20
 n_units = 1000
 
@@ -69,6 +69,9 @@ def forward(x_data, y_data, train=True):
     h1 = F.dropout(F.relu(model.l1(x)),  train=train)
     h2 = F.dropout(F.relu(model.l2(h1)), train=train)
     y = model.l3(h2)
+
+    print y
+    print t
     return F.softmax_cross_entropy(y, t), F.accuracy(y, t)
 
 # Setup optimizer
@@ -90,7 +93,7 @@ for epoch in six.moves.range(1, n_epoch + 1):
             x_batch = cuda.to_gpu(x_batch)
             y_batch = cuda.to_gpu(y_batch)
 
-        print x_batch, y_batch
+        print [ x_batch, y_batch ]
 
         optimizer.zero_grads()
         loss, acc = forward(x_batch, y_batch)
