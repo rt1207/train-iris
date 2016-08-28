@@ -24,7 +24,7 @@ parser.add_argument('--gpu', '-g', default=-1, type=int,
                     help='GPU ID (negative value indicates CPU)')
 args = parser.parse_args()
 
-batchsize = 100
+batchsize = 10
 n_epoch = 20
 n_units = 1000
 
@@ -32,7 +32,7 @@ n_units = 1000
 print('prepare databset')
 
 import csv
-x, y = []. []
+x, y = [], []
 with open('data.csv', 'r') as f:
     reader = csv.reader(f)
     for row in reader:
@@ -46,11 +46,11 @@ with open('data.csv', 'r') as f:
 x, y = np.array(x, dtype=np.float32), np.array(y, dtype=np.int32)
 x /= 10
 
-print x,y
+# print { "data": x, "target": y }
 
 N = 60
-x_train, x_test = np.split( x.astype(np.float32), [N])
-y_train, y_test = np.split( y.astype(np.int32), [N])
+x_train, x_test = np.split( x, [N])
+y_train, y_test = np.split( y, [N])
 N_test = y_test.size
 
 # Prepare multi-layer perceptron model
@@ -89,6 +89,8 @@ for epoch in six.moves.range(1, n_epoch + 1):
         if args.gpu >= 0:
             x_batch = cuda.to_gpu(x_batch)
             y_batch = cuda.to_gpu(y_batch)
+
+        print x_batch, y_batch
 
         optimizer.zero_grads()
         loss, acc = forward(x_batch, y_batch)
