@@ -16,16 +16,17 @@ from chainer import cuda
 import chainer.functions as F
 from chainer import optimizers
 
-# import data
+import pickle
 
 
 parser = argparse.ArgumentParser(description='Chainer example: MNIST')
 parser.add_argument('--gpu', '-g', default=-1, type=int,
                     help='GPU ID (negative value indicates CPU)')
+parser.add_argument('--model', '-m', default='', type=str)
 args = parser.parse_args()
 
 batchsize = 10 # 100
-n_epoch = 20
+n_epoch = 5 # 20
 n_units = 1000
 
 # Prepare dataset
@@ -46,15 +47,20 @@ with open('data.csv', 'r') as f:
 sample = { 'data': np.array(x, dtype=np.float32), 'target': np.array(y, dtype=np.int32) }
 sample['data'] /= 10
 
-N = 60
+N = 100 # 60000
 x_train, x_test = np.split( sample['data'], [N])
 y_train, y_test = np.split( sample['target'], [N])
 N_test = y_test.size
 
 # Prepare multi-layer perceptron model
-model = chainer.FunctionSet(l1=F.Linear(4, n_units),
-                            l2=F.Linear(n_units, n_units),
-                            l3=F.Linear(n_units, 2))
+if args.model == '':
+    model = chainer.FunctionSet(l1=F.Linear(4, n_units), # 784
+                                l2=F.Linear(n_units, n_units),
+                                l3=F.Linear(n_units, 2)) # 10
+else:
+    with open(args.model, 'rb') as i:
+        model = pickle.load(i)
+
 if args.gpu >= 0:
     cuda.init(args.gpu)
     model.to_gpu()
@@ -126,3 +132,6 @@ for epoch in six.moves.range(1, n_epoch + 1):
     print('test  mean loss={}, accuracy={}'.format(
         sum_loss / N_test, sum_accuracy / N_test))
 
+model.to_cpu()
+with open('model.pkl', 'wb') as o:
+    pickle.dump(model, o)
