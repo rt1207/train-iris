@@ -24,7 +24,7 @@ parser.add_argument('--gpu', '-g', default=-1, type=int,
                     help='GPU ID (negative value indicates CPU)')
 args = parser.parse_args()
 
-batchsize = 2 # 100
+batchsize = 10 # 100
 n_epoch = 20
 n_units = 1000
 
@@ -43,20 +43,18 @@ with open('data.csv', 'r') as f:
         del row[4]
         x.append([float(i) for i in row])
 
-x, y = np.array(x, dtype=np.float32), np.array(y, dtype=np.int32)
-x /= 10
-
-# print { "data": x, "target": y }
+sample = { 'data': np.array(x, dtype=np.float32), 'target': np.array(y, dtype=np.int32) }
+sample['data'] /= 10
 
 N = 60
-x_train, x_test = np.split( x, [N])
-y_train, y_test = np.split( y, [N])
+x_train, x_test = np.split( sample['data'], [N])
+y_train, y_test = np.split( sample['target'], [N])
 N_test = y_test.size
 
 # Prepare multi-layer perceptron model
 model = chainer.FunctionSet(l1=F.Linear(4, n_units),
                             l2=F.Linear(n_units, n_units),
-                            l3=F.Linear(n_units, 1))
+                            l3=F.Linear(n_units, 2))
 if args.gpu >= 0:
     cuda.init(args.gpu)
     model.to_gpu()
@@ -69,9 +67,6 @@ def forward(x_data, y_data, train=True):
     h1 = F.dropout(F.relu(model.l1(x)),  train=train)
     h2 = F.dropout(F.relu(model.l2(h1)), train=train)
     y = model.l3(h2)
-
-    print y
-    print t
     return F.softmax_cross_entropy(y, t), F.accuracy(y, t)
 
 # Setup optimizer
@@ -92,8 +87,6 @@ for epoch in six.moves.range(1, n_epoch + 1):
         if args.gpu >= 0:
             x_batch = cuda.to_gpu(x_batch)
             y_batch = cuda.to_gpu(y_batch)
-
-        print [ x_batch, y_batch ]
 
         optimizer.zero_grads()
         loss, acc = forward(x_batch, y_batch)
