@@ -1,137 +1,132 @@
 #!/usr/bin/env python
-"""Chainer example: train a multi-layer perceptron on MNIST
-
-This is a minimal example to write a feed-forward net. It requires scikit-learn
-to load MNIST dataset.
-
-"""
+from __future__ import print_function
 import argparse
 
-import numpy as np
-import six
-
 import chainer
-from chainer import computational_graph as c
-from chainer import cuda
 import chainer.functions as F
-from chainer import optimizers
+import chainer.links as L
+from chainer import training
+from chainer.training import extensions
 
 import pickle
 
+# Network definition
+class MLP(chainer.Chain):
 
-parser = argparse.ArgumentParser(description='Chainer example: MNIST')
-parser.add_argument('--gpu', '-g', default=-1, type=int,
-                    help='GPU ID (negative value indicates CPU)')
-parser.add_argument('--model', '-m', default='', type=str)
-args = parser.parse_args()
+    def __init__(self, n_in, n_units, n_out):
+        super(MLP, self).__init__(
+            l1=L.Linear(n_in, n_units),  # first layer
+            l2=L.Linear(n_units, n_units),  # second layer
+            l3=L.Linear(n_units, n_out),  # output layer
+        )
 
-batchsize = 10 # 100
-n_epoch = 5 # 20
-n_units = 1000
-
-# Prepare dataset
-print('prepare databset')
-
-import csv
-x, y = [], []
-with open('data.csv', 'r') as f:
-    reader = csv.reader(f)
-    for row in reader:
-        if row[4] == 'Iris-setosa':
-            y.append(0)
-        else:
-            y.append(1)
-        del row[4]
-        x.append([float(i) for i in row])
-
-sample = { 'data': np.array(x, dtype=np.float32), 'target': np.array(y, dtype=np.int32) }
-sample['data'] /= 10
-
-N = 100 # 60000
-x_train, x_test = np.split( sample['data'], [N])
-y_train, y_test = np.split( sample['target'], [N])
-N_test = y_test.size
-
-# Prepare multi-layer perceptron model
-if args.model == '':
-    model = chainer.FunctionSet(l1=F.Linear(4, n_units), # 784
-                                l2=F.Linear(n_units, n_units),
-                                l3=F.Linear(n_units, 2)) # 10
-else:
-    with open(args.model, 'rb') as i:
-        model = pickle.load(i)
-
-if args.gpu >= 0:
-    cuda.init(args.gpu)
-    model.to_gpu()
-
-# Neural net architecture
+    def __call__(self, x):
+        h1 = F.relu(self.l1(x))
+        h2 = F.relu(self.l2(h1))
+        return self.l3(h2)
 
 
-def forward(x_data, y_data, train=True):
-    x, t = chainer.Variable(x_data), chainer.Variable(y_data)
-    h1 = F.dropout(F.relu(model.l1(x)),  train=train)
-    h2 = F.dropout(F.relu(model.l2(h1)), train=train)
-    y = model.l3(h2)
-    return F.softmax_cross_entropy(y, t), F.accuracy(y, t)
+def main():
+    parser = argparse.ArgumentParser(description='Chainer example: MNIST')
+    parser.add_argument('--batchsize', '-b', type=int, default=100,
+                        help='Number of images in each mini batch')
+    parser.add_argument('--epoch', '-e', type=int, default=20,
+                        help='Number of sweeps over the dataset to train')
+    parser.add_argument('--gpu', '-g', type=int, default=-1,
+                        help='GPU ID (negative value indicates CPU)')
+    parser.add_argument('--out', '-o', default='result',
+                        help='Directory to output the result')
+    parser.add_argument('--resume', '-r', default='',
+                        help='Resume the training from snapshot')
+    parser.add_argument('--unit', '-u', type=int, default=1000,
+                        help='Number of units')
+    parser.add_argument('--model', '-m', type=str, default='')
+    parser.add_argument('--input', '-i', default='', type=str)
+    args = parser.parse_args()
 
-# Setup optimizer
-optimizer = optimizers.Adam()
-optimizer.setup(model.collect_parameters())
+    print('GPU: {}'.format(args.gpu))
+    print('# unit: {}'.format(args.unit))
+    print('# Minibatch-size: {}'.format(args.batchsize))
+    print('# epoch: {}'.format(args.epoch))
+    print('')
 
-# Learning loop
-for epoch in six.moves.range(1, n_epoch + 1):
-    print('epoch', epoch)
+    # Set up a neural network to train
+    # Classifier reports softmax cross entropy loss and accuracy at every
+    # iteration, which will be used by the PrintReport extension below.
+    if args.model == '': 
+        model = L.Classifier(MLP( 4, args.unit, 2))
+    else:
+        with open(args.model, 'rb') as i:
+            model = pickle.load(i)
 
-    # training
-    perm = np.random.permutation(N)
-    sum_accuracy = 0
-    sum_loss = 0
-    for i in six.moves.range(0, N, batchsize):
-        x_batch = x_train[perm[i:i + batchsize]]
-        y_batch = y_train[perm[i:i + batchsize]]
-        if args.gpu >= 0:
-            x_batch = cuda.to_gpu(x_batch)
-            y_batch = cuda.to_gpu(y_batch)
+    if args.gpu >= 0:
+        chainer.cuda.get_device(args.gpu).use()  # Make a specified GPU current
+        model.to_gpu()  # Copy the model to the GPU
 
-        optimizer.zero_grads()
-        loss, acc = forward(x_batch, y_batch)
-        loss.backward()
-        optimizer.update()
+    # Setup an optimizer
+    optimizer = chainer.optimizers.Adam()
+    optimizer.setup(model)
 
-        if epoch == 1 and i == 0:
-            with open("graph.dot", "w") as o:
-                o.write(c.build_computational_graph((loss, )).dump())
-            with open("graph.wo_split.dot", "w") as o:
-                g = c.build_computational_graph((loss, ),
-                                                remove_split=True)
-                o.write(g.dump())
-            print('graph generated')
+    # Load the MNIST dataset
+    import csv
+    x, y = [], []
+    with open('data.csv', 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row[4] == 'Iris-setosa':
+                y.append(0)
+            else:
+                y.append(1)
+            del row[4]
+            x.append([float(i) for i in row])
 
-        sum_loss += float(cuda.to_cpu(loss.data)) * len(y_batch)
-        sum_accuracy += float(cuda.to_cpu(acc.data)) * len(y_batch)
+    import numpy as np
+    train, test = chainer.datasets.TupleDataset( np.array(x, dtype=np.float32)/10, np.array(y, dtype=np.int32)), chainer.datasets.TupleDataset( np.array(x[1:10], dtype=np.float32)/10, np.array(y[1:10], dtype=np.int32) )
 
-    print('train mean loss={}, accuracy={}'.format(
-        sum_loss / N, sum_accuracy / N))
+    train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
+    test_iter = chainer.iterators.SerialIterator(test, args.batchsize,
+                                                 repeat=False, shuffle=False)
 
-    # evaluation
-    sum_accuracy = 0
-    sum_loss = 0
-    for i in six.moves.range(0, N_test, batchsize):
-        x_batch = x_test[i:i + batchsize]
-        y_batch = y_test[i:i + batchsize]
-        if args.gpu >= 0:
-            x_batch = cuda.to_gpu(x_batch)
-            y_batch = cuda.to_gpu(y_batch)
+    # Set up a trainer
+    updater = training.StandardUpdater(train_iter, optimizer, device=args.gpu)
+    trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
 
-        loss, acc = forward(x_batch, y_batch, train=False)
+    # Evaluate the model with the test dataset for each epoch
+    trainer.extend(extensions.Evaluator(test_iter, model, device=args.gpu))
 
-        sum_loss += float(cuda.to_cpu(loss.data)) * len(y_batch)
-        sum_accuracy += float(cuda.to_cpu(acc.data)) * len(y_batch)
+    # Dump a computational graph from 'loss' variable at the first iteration
+    # The "main" refers to the target link of the "main" optimizer.
+    trainer.extend(extensions.dump_graph('main/loss'))
 
-    print('test  mean loss={}, accuracy={}'.format(
-        sum_loss / N_test, sum_accuracy / N_test))
+    # Take a snapshot at each epoch
+    trainer.extend(extensions.snapshot())
 
-model.to_cpu()
-with open('model.pkl', 'wb') as o:
-    pickle.dump(model, o)
+    # Write a log of evaluation statistics for each epoch
+    trainer.extend(extensions.LogReport())
+
+    # Print selected entries of the log to stdout
+    # Here "main" refers to the target link of the "main" optimizer again, and
+    # "validation" refers to the default name of the Evaluator extension.
+    # Entries other than 'epoch' are reported by the Classifier link, called by
+    # either the updater or the evaluator.
+    trainer.extend(extensions.PrintReport(
+        ['epoch', 'main/loss', 'validation/main/loss',
+         'main/accuracy', 'validation/main/accuracy']))
+
+    # Print a progress bar to stdout
+    trainer.extend(extensions.ProgressBar())
+
+    if args.resume:
+        # Resume from a snapshot
+        chainer.serializers.load_npz(args.resume, trainer)
+
+    # Run the training
+    trainer.run()
+
+    # save model
+    model.to_cpu()
+    with open('model.pkl', 'wb') as o:
+        pickle.dump(model, o)
+
+if __name__ == '__main__':
+    main()
