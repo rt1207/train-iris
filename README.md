@@ -1,7 +1,7 @@
 # train-iris
 
 - python 2.7
-- chainer 1.1.0
+- chainer 1.14.0
 
 This script trains iris sample data (read from csv) and save trained model. Run the following command,
 

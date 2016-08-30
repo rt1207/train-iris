@@ -30,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description='Chainer example: MNIST')
     parser.add_argument('--batchsize', '-b', type=int, default=100,
                         help='Number of images in each mini batch')
-    parser.add_argument('--epoch', '-e', type=int, default=20,
+    parser.add_argument('--epoch', '-e', type=int, default=10,
                         help='Number of sweeps over the dataset to train')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
                         help='GPU ID (negative value indicates CPU)')
@@ -67,7 +67,7 @@ def main():
     optimizer = chainer.optimizers.Adam()
     optimizer.setup(model)
 
-    # Load the MNIST dataset
+    # Load the iris dataset
     import csv
     x, y = [], []
     with open('data.csv', 'r') as f:
@@ -80,8 +80,12 @@ def main():
             del row[4]
             x.append([float(i) for i in row])
 
+    # set the test dataset
+    x_test, y_test = [[1,1,0,0]], [0]
+
     import numpy as np
-    train, test = chainer.datasets.TupleDataset( np.array(x, dtype=np.float32)/10, np.array(y, dtype=np.int32)), chainer.datasets.TupleDataset( np.array(x[1:10], dtype=np.float32)/10, np.array(y[1:10], dtype=np.int32) )
+    train, test = chainer.datasets.TupleDataset( np.array(x, dtype=np.float32)/10, np.array(y, dtype=np.int32)), \
+                chainer.datasets.TupleDataset( np.array(x_test, dtype=np.float32)/10, np.array(y_test, dtype=np.int32) )
 
     train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
     test_iter = chainer.iterators.SerialIterator(test, args.batchsize,
@@ -99,7 +103,7 @@ def main():
     trainer.extend(extensions.dump_graph('main/loss'))
 
     # Take a snapshot at each epoch
-    trainer.extend(extensions.snapshot())
+    # trainer.extend(extensions.snapshot())
 
     # Write a log of evaluation statistics for each epoch
     trainer.extend(extensions.LogReport())
