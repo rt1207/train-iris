@@ -8,7 +8,7 @@ import chainer.links as L
 from chainer import training
 from chainer.training import extensions
 
-import pickle
+from chainer import serializers
 
 # Network definition
 class MLP(chainer.Chain):
@@ -57,7 +57,8 @@ def main():
         model = L.Classifier(MLP( 4, args.unit, 2))
     else:
         with open(args.model, 'rb') as i:
-            model = pickle.load(i)
+            model = L.Classifier(MLP( 4, args.unit, 2))
+            serializers.load_npz(i, model)
 
     if args.gpu >= 0:
         chainer.cuda.get_device(args.gpu).use()  # Make a specified GPU current
@@ -129,8 +130,7 @@ def main():
 
     # save model
     model.to_cpu()
-    with open('model.pkl', 'wb') as o:
-        pickle.dump(model, o)
+    serializers.save_npz('model.npz', model)
 
 if __name__ == '__main__':
     main()
