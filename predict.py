@@ -31,8 +31,6 @@ class MLP(chainer.Chain):
 def predict(model, x_test):
     x = chainer.Variable(x_test)
 
-    # 活性化関数に正規化線形関数(ReLU)を使用
-    # 汎化性能向上のためにドロップアウトを使用
     h1 = F.dropout(F.relu(model.predictor.l1(x)))
     h2 = F.dropout(F.relu(model.predictor.l2(h1)))
     y = model.predictor.l3(h2)
