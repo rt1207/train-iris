@@ -9,8 +9,6 @@ import argparse
 import chainer
 import chainer.functions as F
 import chainer.links as L
-from chainer import training
-from chainer.training import extensions
 from chainer import serializers
 
 import numpy as np
@@ -43,16 +41,6 @@ def predict(model, x_test):
 
 def main():
     parser = argparse.ArgumentParser(description='Chainer example: MNIST')
-    parser.add_argument('--batchsize', '-b', type=int, default=100,
-                        help='Number of images in each mini batch')
-    parser.add_argument('--epoch', '-e', type=int, default=10,
-                        help='Number of sweeps over the dataset to train')
-    parser.add_argument('--gpu', '-g', type=int, default=-1,
-                        help='GPU ID (negative value indicates CPU)')
-    parser.add_argument('--out', '-o', default='result',
-                        help='Directory to output the result')
-    parser.add_argument('--resume', '-r', default='',
-                        help='Resume the training from snapshot')
     parser.add_argument('--unit', '-u', type=int, default=1000,
                         help='Number of units')
     parser.add_argument('--model', '-m', type=str, default='')
