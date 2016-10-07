@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import argparse
-
+import numpy as np
+from sklearn import datasets
+from sklearn.cross_validation import train_test_split
 import chainer
 import chainer.functions as F
 import chainer.links as L
@@ -53,11 +55,13 @@ def main():
     # Set up a neural network to train
     # Classifier reports softmax cross entropy loss and accuracy at every
     # iteration, which will be used by the PrintReport extension below.
+    x_size = 4
+    y_size = 3
     if args.model == '': 
-        model = L.Classifier(MLP( 4, args.unit, 2))
+        model = L.Classifier(MLP( x_size, args.unit, y_size))
     else:
         with open(args.model, 'rb') as i:
-            model = L.Classifier(MLP( 4, args.unit, 2))
+            model = L.Classifier(MLP( x_size, args.unit, y_size))
             serializers.load_npz(i, model)
 
     if args.gpu >= 0:
@@ -69,24 +73,16 @@ def main():
     optimizer.setup(model)
 
     # Load the iris dataset
-    import csv
-    x, y = [], []
-    with open('data.csv', 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if row[4] == 'Iris-setosa':
-                y.append(0)
-            else:
-                y.append(1)
-            del row[4]
-            x.append([float(i) for i in row])
+    iris = datasets.load_iris()
+    X = iris.data.astype(np.float32)
+    Y = iris.target.astype(np.int32)
 
-    # set the test dataset
-    x_test, y_test = [[1,1,0,0]], [0]
+    # Divide the dataset
+    X_train, X_test = train_test_split(X)
+    Y_train, Y_test = train_test_split(Y)
 
-    import numpy as np
-    train, test = chainer.datasets.TupleDataset( np.array(x, dtype=np.float32)/10, np.array(y, dtype=np.int32)), \
-                chainer.datasets.TupleDataset( np.array(x_test, dtype=np.float32)/10, np.array(y_test, dtype=np.int32) )
+    train, test = chainer.datasets.TupleDataset( X_train, Y_train ), \
+                chainer.datasets.TupleDataset( X_test, Y_test )
 
     train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
     test_iter = chainer.iterators.SerialIterator(test, args.batchsize,
