@@ -2,12 +2,11 @@
 from __future__ import print_function
 import argparse
 import numpy as np
-from sklearn import datasets
-from sklearn.cross_validation import train_test_split
+from sklearn.datasets import load_iris
 import chainer
 import chainer.functions as F
 import chainer.links as L
-from chainer import training
+from chainer import training, datasets
 from chainer.training import extensions
 
 from chainer import serializers
@@ -52,12 +51,20 @@ def main():
     print('# epoch: {}'.format(args.epoch))
     print('')
 
-    # Set up a neural network to train
-    # Classifier reports softmax cross entropy loss and accuracy at every
-    # iteration, which will be used by the PrintReport extension below.
+    # Load the iris dataset
+    iris = load_iris()
+    X = iris.data.astype(np.float32)
+    Y = iris.target.astype(np.int32)
+
+    train ,test= datasets.split_dataset_random(datasets.TupleDataset(X,Y),100)
+    train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
+    test_iter = chainer.iterators.SerialIterator(test, args.batchsize,
+                                                 repeat=False, shuffle=False)
     x_size = 4
     y_size = 3
-    if args.model == '': 
+
+    # Set up a neural network to train
+    if args.model == '':
         model = L.Classifier(MLP( x_size, args.unit, y_size))
     else:
         with open(args.model, 'rb') as i:
@@ -72,54 +79,17 @@ def main():
     optimizer = chainer.optimizers.Adam()
     optimizer.setup(model)
 
-    # Load the iris dataset
-    iris = datasets.load_iris()
-    X = iris.data.astype(np.float32)
-    Y = iris.target.astype(np.int32)
-
-    # Divide the dataset
-    X_train, X_test = train_test_split(X)
-    Y_train, Y_test = train_test_split(Y)
-
-    train, test = chainer.datasets.TupleDataset( X_train, Y_train ), \
-                chainer.datasets.TupleDataset( X_test, Y_test )
-
-    train_iter = chainer.iterators.SerialIterator(train, args.batchsize)
-    test_iter = chainer.iterators.SerialIterator(test, args.batchsize,
-                                                 repeat=False, shuffle=False)
-
     # Set up a trainer
     updater = training.StandardUpdater(train_iter, optimizer, device=args.gpu)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
 
-    # Evaluate the model with the test dataset for each epoch
     trainer.extend(extensions.Evaluator(test_iter, model, device=args.gpu))
-
-    # Dump a computational graph from 'loss' variable at the first iteration
-    # The "main" refers to the target link of the "main" optimizer.
     trainer.extend(extensions.dump_graph('main/loss'))
-
-    # Take a snapshot at each epoch
-    # trainer.extend(extensions.snapshot())
-
-    # Write a log of evaluation statistics for each epoch
     trainer.extend(extensions.LogReport())
-
-    # Print selected entries of the log to stdout
-    # Here "main" refers to the target link of the "main" optimizer again, and
-    # "validation" refers to the default name of the Evaluator extension.
-    # Entries other than 'epoch' are reported by the Classifier link, called by
-    # either the updater or the evaluator.
     trainer.extend(extensions.PrintReport(
         ['epoch', 'main/loss', 'validation/main/loss',
          'main/accuracy', 'validation/main/accuracy']))
-
-    # Print a progress bar to stdout
     trainer.extend(extensions.ProgressBar())
-
-    if args.resume:
-        # Resume from a snapshot
-        chainer.serializers.load_npz(args.resume, trainer)
 
     # Run the training
     trainer.run()
